@@ -1,0 +1,11 @@
+# 统一使用 LF，避免 Windows 检出时换行符混乱
+* text=auto eol=lf
+
+# 二进制
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

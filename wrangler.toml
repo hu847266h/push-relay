@@ -1,0 +1,21 @@
+# Worker 名称：可随意改（改完记得重新部署，workers.dev 地址会跟着变）
+name = "push-relay"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+
+# 配置存储：推送目标、推送日志、临时图片都放在这个 KV 里
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_WITH_YOUR_KV_ID"
+
+[vars]
+# 两个敏感值不要写进本文件，用命令注入：
+#   npx wrangler secret put PUSH_SECRET
+#   npx wrangler secret put ADMIN_TOKEN
+#
+# 不想用 KV：删掉上面的 [[kv_namespaces]]，直接把目标数组塞进 TARGETS。
+# 代价是没有控制台（无法在线增删目标、看不到推送日志）。
+# TARGETS = '[{"id":"a","name":"我的Bark","type":"bark","enabled":true,"config":{"key":"xxxx"}}]'
+
+[observability]
+enabled = true

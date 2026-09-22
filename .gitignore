@@ -1,0 +1,14 @@
+node_modules/
+.wrangler/
+.dev.vars
+
+# 部署后自动生成的本地状态（含 PUSH_SECRET / ADMIN_TOKEN 明文，切勿提交）
+.deploy.json
+.deploy*.json
+
+# 其它
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

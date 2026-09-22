@@ -1,0 +1,32 @@
+{
+  "name": "push-relay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "One Webhook in, many push platforms out — a serverless fan-out relay on Cloudflare Workers",
+  "keywords": [
+    "cloudflare-workers",
+    "webhook",
+    "push-notification",
+    "notify",
+    "bark",
+    "wecom",
+    "dingtalk",
+    "feishu",
+    "telegram",
+    "discord",
+    "ntfy",
+    "serverchan",
+    "gotify"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "test": "node test/run.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
