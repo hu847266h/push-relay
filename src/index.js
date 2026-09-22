@@ -685,6 +685,11 @@ async function fanOut(env, msg, origin) {
   const targets = cfg.targets.filter((t) => t.enabled !== false);
   const hosted = [];
 
+  // 发送端未提供标题时统一兜底。放在扇出入口而不是逐个适配器里，是为了让
+  // 「通用转发」的默认载荷也能带上标题（它不做 title 兜底，会原样发出空串）。
+  // 刻意不重算 msg.text —— 正文保持发送端原样，不会凭空多出一行标题。
+  if (!msg.title) msg.title = DEFAULT_TITLE;
+
   const ctx = {
     origin,
     async hostImage(bytes, mime) {

@@ -4,7 +4,7 @@
 > 一个 Webhook 入口，把同一条通知**并发扇出**到多个推送渠道 —— 跑在 Cloudflare Workers 上，无服务器、零依赖、单文件。
 
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
-[![Tests](https://img.shields.io/badge/tests-105%20passed-brightgreen)](#本地开发与测试)
+[![Tests](https://img.shields.io/badge/tests-109%20passed-brightgreen)](#本地开发与测试)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 ---
@@ -261,7 +261,7 @@ Body 模板**留空**时发默认 JSON：`{"title":…,"content":…,"image_url"
 ## 本地开发与测试
 
 ```bash
-npm test          # 105 项断言：桩掉网络与 KV，验证每个适配器真正发出的请求
+npm test          # 109 项断言：桩掉网络与 KV，验证每个适配器真正发出的请求
 npx wrangler dev  # 本地跑，含真实 KV 模拟
 ```
 

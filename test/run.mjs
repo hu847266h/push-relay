@@ -103,11 +103,11 @@ const ALL_TARGETS = [
 ];
 
 const TITLE = '推送通知|･ω･)';
-const CONTENT = '每日实训已完成';
+const CONTENT = '构建已完成 v1.2.3';
 
 // ---------------- 0. MD5 / base64 正确性 ----------------
 section('内部函数正确性');
-for (const s of ['', 'abc', 'hello world', '三月七小助手']) {
+for (const s of ['', 'abc', 'hello world', '推送通知']) {
   const b = new TextEncoder().encode(s);
   const expect = crypto.createHash('md5').update(Buffer.from(b)).digest('hex');
   check(`md5("${s}")`, mod.md5(b) === expect, `got ${mod.md5(b)} want ${expect}`);
@@ -140,7 +140,7 @@ section('载荷 A：纯文字 JSON（发送端不带截图）');
   const byHost = (frag) => seen.filter((s) => s.url.includes(frag));
   const wecom = byHost('qyapi').filter((s) => s.url.includes('webhook/send'));
   check('企微机器人收到 markdown', wecom.length >= 1 && String(wecom[0].body).includes('"msgtype":"markdown"'));
-  check('企微机器人文本含标题与正文', String(wecom[0].body).includes('每日实训已完成'));
+  check('企微机器人文本含标题与正文', String(wecom[0].body).includes(CONTENT) && String(wecom[0].body).includes(TITLE));
   check('企微机器人未误发图片消息', !String(wecom[0].body).includes('"msgtype":"image"'));
 
   const dd = byHost('oapi.dingtalk.com')[0];
@@ -432,7 +432,44 @@ section('边界与容错');
   check('未知路径回落到控制台页面', r404.status === 200 && (r404.headers.get('Content-Type') || '').includes('text/html'));
 }
 
-// ---------------- 7. 适配器覆盖度 ----------------
+// ---------------- 7. 标题兜底（发送端不给 title 的通用场景） ----------------
+section('标题兜底与发送端无关性');
+{
+  const kv = fakeKV();
+  installFetch(); seen.length = 0;
+  await kv.put('config', JSON.stringify({ targets: [
+    { id: 'cu', name: '通用转发', type: 'custom', enabled: true, config: { url: 'https://custom.example.com/hook', method: 'POST', with_image: '0' } },
+    { id: 'wb', name: '企微群', type: 'wecom_bot', enabled: true, config: { webhook: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=K1' } },
+  ], settings: {} }));
+  const env = makeEnv(kv);
+
+  // 模拟"只发正文"的发送端（很多监控/脚本只推一句话）
+  await worker.fetch(new Request(`${ORIGIN}/push/${SECRET}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: '磁盘使用率 95%' }),
+  }), env);
+
+  const cu = seen.find((x) => x.url.includes('custom.example.com'));
+  const pj = JSON.parse(String(cu.body));
+  check('无标题时通用转发的默认载荷有兜底标题', pj.title === '推送通知', String(cu.body));
+  check('无标题时正文原样保留', pj.content === '磁盘使用率 95%', String(cu.body));
+
+  const wb = seen.find((x) => x.url.includes('qyapi') && String(x.body).includes('markdown'));
+  const md = JSON.parse(String(wb.body)).markdown.content;
+  check('群消息正文不会凭空多出一行标题', md === '磁盘使用率 95%', md);
+
+  // 显式标题不能被兜底覆盖
+  seen.length = 0;
+  await worker.fetch(new Request(`${ORIGIN}/push/${SECRET}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: '部署完成', content: 'v1.2.3' }),
+  }), env);
+  const cu2 = seen.find((x) => x.url.includes('custom.example.com'));
+  check('显式标题不被兜底覆盖', JSON.parse(String(cu2.body)).title === '部署完成', String(cu2.body));
+}
+
+
+// ---------------- 8. 适配器覆盖度 ----------------
 section('适配器覆盖度');
 {
   const names = ['wecom_bot','wecom_app','dingtalk_bot','feishu_bot','telegram','bark','serverchan','serverchan3','pushplus','pushdeer','gotify','discord','ntfy','wxpusher','custom'];
