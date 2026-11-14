@@ -214,6 +214,38 @@ const ADAPTERS = {
     },
   },
 
+  qq_official: {
+    label: 'QQ 机器人（官方 API 私聊）',
+    image: false,
+    fields: [
+      { key: 'appid', label: '机器人 AppID', required: true },
+      { key: 'client_secret', label: '机器人 ClientSecret', required: true },
+      { key: 'openid', label: '接收人 openid（私聊）', required: true, ph: '用户在该机器人下的 openid，从机器人收到的事件里取' },
+    ],
+    async send(cfg, msg) {
+      // 与三月七小助手 QqBotNotifier 的做法一致：先换 token，再发 C2C 主动消息，
+      // 不带 msg_id/msg_seq（主动消息不需要被动回复字段）；正文上限 2000 字。
+      const appid = String(cfg.appid || '').trim();
+      const clientSecret = String(cfg.client_secret || '').trim();
+      const openid = String(cfg.openid || '').trim();
+      if (!appid || !clientSecret || !openid) return { ok: false, detail: '缺少 appid / client_secret / openid' };
+      const tk = await postJson('https://bots.qq.com/app/getAppAccessToken', { appId: appid, clientSecret });
+      const tj = safeJson(tk.body);
+      if (!tj || !tj.access_token) return { ok: false, detail: '取 token 失败 ' + clip(tk.body) };
+      let content = msg.text || '';
+      if (content.length > 2000) content = content.slice(0, 1999) + '…';
+      const r = await postJson(
+        `https://api.sgroup.qq.com/v2/users/${encodeURIComponent(openid)}/messages`,
+        { content, msg_type: 0 },
+        { Authorization: `QQBot ${tj.access_token}` }
+      );
+      const j = safeJson(r.body);
+      // 业务错误可能随 HTTP 200 返回（响应体带 code），与取 token 时同理按 code 判失败
+      if (!r.ok || (j && j.code)) return { ok: false, detail: clip(r.body) };
+      return { ok: true, detail: '文本' };
+    },
+  },
+
   dingtalk_bot: {
     label: '钉钉机器人',
     image: 'url',

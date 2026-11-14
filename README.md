@@ -4,7 +4,7 @@
 > 一个 Webhook 入口，把同一条通知**并发扇出**到多个推送渠道 —— 跑在 Cloudflare Workers 上，无服务器、零依赖、单文件。
 
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
-[![Tests](https://img.shields.io/badge/tests-109%20passed-brightgreen)](#本地开发与测试)
+[![Tests](https://img.shields.io/badge/tests-124%20passed-brightgreen)](#本地开发与测试)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 ---
@@ -38,7 +38,7 @@ Push Relay 在中间加一层：**发送端只认一个地址**，真正的投�
 
 ## 特性
 
-- **15 类推送渠道**：企业微信（机器人/应用）、钉钉、飞书、Bark、Telegram、Discord、Server酱（Turbo/³）、PushPlus、PushDeer、Gotify、ntfy、WxPusher，外加一个万能「通用转发」。
+- **16 类推送渠道**：企业微信（机器人/应用）、QQ 机器人（官方 API 私聊）、钉钉、飞书、Bark、Telegram、Discord、Server酱（Turbo/³）、PushPlus、PushDeer、Gotify、ntfy、WxPusher，外加一个万能「通用转发」。
 - **入站载荷自适应**：JSON、multipart 表单、urlencoded、纯文本、GET 查询参数全认。发送端**通常什么都不用改**。
 - **图片全链路**：支持直接上传图片的渠道走原生上传；只吃图片 URL 的渠道自动转成临时托管链接；「通用转发」还能拿到 base64。
 - **并发扇出 + 逐目标结果**：一个渠道挂了不影响其它渠道，返回体里单独标出失败原因（平台原始错误原样带出，方便排查）。
@@ -111,6 +111,7 @@ routes = [
 |---|---|---|
 | 企业微信机器人 | 群机器人 Webhook 地址 | ✅ 原生（base64 + md5） |
 | 企业微信应用 | corpid / corpsecret / agentid / touser | ✅ 先传素材再发 |
+| QQ 机器人（官方 API 私聊） | AppID / ClientSecret / 接收人 openid | ➖ 仅文字（正文超 2000 字截断）；主动私聊受平台配额限制，见下注 |
 | 钉钉机器人 | Webhook 地址（+ 加签密钥，若安全设置选了「加签」） | ✅ 转图片链接内嵌 markdown |
 | 飞书机器人 | Webhook 地址（+ 签名校验密钥） | ➖ 仅文字 |
 | Bark (iOS) | device key（可自建服务地址） | ✅ 转图片链接 |
@@ -125,6 +126,8 @@ routes = [
 | WxPusher | appToken + UID | ➖ |
 | **通用转发** | 目标地址 + 可选 Headers / Body 模板 | ✅ 模板占位符 |
 
+> 注：QQ 官方 API 的 C2C 主动私聊有配额（官方文档：每用户每月 4 条，被动回复为每条入站消息 5 条/60 分钟）。本适配器发的是主动消息，配额耗尽时 QQ 会返回业务错误，推送记录里会原样显示失败原因；高频告警请以企业微信等渠道为主，QQ 只作补充。
+>
 > 平台都不支持？用「通用转发」—— 填一个地址加一个 body 模板，就能投递到任意 HTTP 接口。
 
 ## 发送端怎么接
@@ -261,7 +264,7 @@ Body 模板**留空**时发默认 JSON：`{"title":…,"content":…,"image_url"
 ## 本地开发与测试
 
 ```bash
-npm test          # 109 项断言：桩掉网络与 KV，验证每个适配器真正发出的请求
+npm test          # 124 项断言：桩掉网络与 KV，验证每个适配器真正发出的请求
 npx wrangler dev  # 本地跑，含真实 KV 模拟
 ```
 

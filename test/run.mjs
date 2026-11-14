@@ -70,6 +70,8 @@ function installFetch() {
     if (u.includes('discord.com')) return new Response(null, { status: 200 });
     if (u.includes('ntfy.sh')) return new Response('ok', { status: 200 });
     if (u.includes('wxpusher.zjiecode.com')) return J({ code: 1000 });
+    if (u.includes('bots.qq.com/app/getAppAccessToken')) return J({ access_token: 'QQAT_TEST', expires_in: 7200 });
+    if (u.includes('api.sgroup.qq.com/v2/users/')) return J({ id: 'QQMSG_TEST', timestamp: '2026-11-14T00:00:00Z' });
     if (u.includes('custom.example.com')) return J({ received: true });
     return J({ ok: true });
   };
@@ -354,7 +356,7 @@ section('鉴权');
   const adm2 = await worker.fetch(new Request(`${ORIGIN}/admin/api/state?key=${ADMIN}`), env);
   check('管理 API 带 key 可用', adm2.status === 200);
   const st = await adm2.json();
-  check('state 返回类型定义与推送地址', Object.keys(st.types).length === 15 && st.pushPath.includes(SECRET), JSON.stringify(Object.keys(st.types).length));
+  check('state 返回类型定义与推送地址', Object.keys(st.types).length === 16 && st.pushPath.includes(SECRET), JSON.stringify(Object.keys(st.types).length));
 }
 
 // ---------------- 5. 管理操作与日志 ----------------
@@ -472,15 +474,96 @@ section('标题兜底与发送端无关性');
 // ---------------- 8. 适配器覆盖度 ----------------
 section('适配器覆盖度');
 {
-  const names = ['wecom_bot','wecom_app','dingtalk_bot','feishu_bot','telegram','bark','serverchan','serverchan3','pushplus','pushdeer','gotify','discord','ntfy','wxpusher','custom'];
+  const names = ['wecom_bot','wecom_app','qq_official','dingtalk_bot','feishu_bot','telegram','bark','serverchan','serverchan3','pushplus','pushdeer','gotify','discord','ntfy','wxpusher','custom'];
   const kv = fakeKV();
   await kv.put('config', JSON.stringify({ targets: [], settings: {} }));
   const stt = await (await worker.fetch(new Request(`${ORIGIN}/admin/api/state?key=${ADMIN}`), makeEnv(kv))).json();
   for (const n of names) check(`类型 ${n} 已注册`, !!stt.types[n]);
-  check('共 15 个适配器', Object.keys(stt.types).length === 15, String(Object.keys(stt.types).length));
+  check('共 16 个适配器', Object.keys(stt.types).length === 16, String(Object.keys(stt.types).length));
   for (const [k, v] of Object.entries(stt.types)) {
     check(`  ${k} 字段定义完整`, Array.isArray(v.fields) && v.fields.length > 0 && v.fields.every(f => f.key && f.label));
   }
+}
+
+// ---------------- 9. QQ 官方机器人适配器 ----------------
+section('QQ 官方机器人（qq_official）');
+{
+  const QQ = { id: 'q1', name: 'QQ私聊', type: 'qq_official', enabled: true,
+    config: { appid: 'APPID_TEST', client_secret: 'SECRET_TEST', openid: 'OPENID_TEST' } };
+  async function fireQQ(targets, body) {
+    const kv = fakeKV();
+    installFetch(); seen.length = 0;
+    await kv.put('config', JSON.stringify({ targets, settings: {} }));
+    const res = await worker.fetch(new Request(`${ORIGIN}/push/${SECRET}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || { title: TITLE, content: CONTENT }),
+    }), makeEnv(kv));
+    return { j: await res.json(), seen: [...seen] };
+  }
+
+  // a) 正常链路：先换 token，再发私聊
+  let r = await fireQQ([QQ]);
+  check('QQ 目标投递成功', r.j.summary.ok === 1, JSON.stringify(r.j.results));
+  const tk = r.seen.find((s) => s.url.includes('getAppAccessToken'));
+  check('换 token 用 appId/clientSecret', tk && JSON.parse(String(tk.body)).appId === 'APPID_TEST'
+    && JSON.parse(String(tk.body)).clientSecret === 'SECRET_TEST', String(tk && tk.body));
+  const dm = r.seen.find((s) => s.url.includes('api.sgroup.qq.com/v2/users/'));
+  check('私聊发到对应 openid', dm && dm.url.includes('/v2/users/OPENID_TEST/messages'), dm && dm.url);
+  check('私聊带 QQBot 鉴权头', dm && dm.headers && dm.headers.Authorization === 'QQBot QQAT_TEST', JSON.stringify(dm && dm.headers));
+  const dmBody = JSON.parse(String(dm.body));
+  check('私聊为文本消息且含标题正文', dmBody.msg_type === 0 && dmBody.content === TITLE + '\n' + CONTENT, String(dm.body));
+  check('主动消息不带 msg_id/msg_seq', !('msg_id' in dmBody) && !('msg_seq' in dmBody), String(dm.body));
+
+  // b) 配置缺失时不发请求、给出明确原因
+  r = await fireQQ([{ ...QQ, config: { appid: 'APPID_TEST' } }]);
+  check('缺配置时失败并说明缺什么', r.j.summary.ok === 0 && r.j.results[0].detail.includes('缺少'), JSON.stringify(r.j.results));
+  check('缺配置时未向 QQ 发请求', r.seen.length === 0, String(r.seen.length));
+
+  // c) 换 token 失败：不继续发私聊，错误原文带回
+  {
+    const kv = fakeKV();
+    installFetch(); seen.length = 0;
+    await kv.put('config', JSON.stringify({ targets: [QQ], settings: {} }));
+    const orig = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+      if (String(url).includes('getAppAccessToken')) return new Response(JSON.stringify({ code: 11243, message: 'invalid token' }), { status: 200 });
+      return orig(url, init);
+    };
+    const res = await worker.fetch(new Request(`${ORIGIN}/push/${SECRET}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 't', content: 'c' }),
+    }), makeEnv(kv));
+    const j = await res.json();
+    check('换 token 失败时 detail 带服务端原文', j.summary.ok === 0 && j.results[0].detail.includes('11243'), JSON.stringify(j.results));
+    check('换 token 失败时未发私聊', !seen.some((s) => s.url.includes('sgroup.qq.com')));
+    installFetch();
+  }
+
+  // d) 私聊接口返回业务错误码（即使 HTTP 200）也判失败
+  {
+    const kv = fakeKV();
+    installFetch(); seen.length = 0;
+    await kv.put('config', JSON.stringify({ targets: [QQ], settings: {} }));
+    const orig = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+      if (String(url).includes('sgroup.qq.com')) return new Response(JSON.stringify({ code: 40034105, message: 'no permission' }), { status: 200 });
+      return orig(url, init);
+    };
+    const res = await worker.fetch(new Request(`${ORIGIN}/push/${SECRET}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 't', content: 'c' }),
+    }), makeEnv(kv));
+    const j = await res.json();
+    check('业务错误码判失败且原文带回', j.summary.ok === 0 && j.results[0].detail.includes('40034105'), JSON.stringify(j.results));
+    installFetch();
+  }
+
+  // e) 超长正文截断到 2000 字（同三月七小助手上限）
+  r = await fireQQ([QQ], { title: 'T', content: '字'.repeat(2500) });
+  const dm2 = r.seen.find((s) => s.url.includes('api.sgroup.qq.com/v2/users/'));
+  const c2 = JSON.parse(String(dm2.body)).content;
+  check('超长正文截断为 2000 字并以省略号结尾', c2.length === 2000 && c2.endsWith('…'), `len=${c2.length}`);
+  check('截断后仍投递成功', r.j.summary.ok === 1, JSON.stringify(r.j.results));
 }
 
 // ---------------- 汇报 ----------------
